@@ -1,0 +1,47 @@
+.list-group-item {
+    background-color: transparent;
+    border-color: #444;
+    color: #ddd;
+}
+.list-group-item:hover {
+    background-color: #2d2d2d;
+    color: white;
+}
+.list-group-item.active {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.table {
+    color: #ddd;
+}
+.table thead th {
+    background-color: #2d2d2d;
+    border-color: #444;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+.table tbody tr:hover {
+    background-color: #2d2d2d;
+}
+.table td, .table th {
+    border-color: #444;
+    vertical-align: middle;
+}
+
+#source-view code {
+    color: #0f0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+#source-view .badge {
+    font-size: 0.75rem;
+}
+
+#source-view th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
