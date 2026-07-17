@@ -1,49 +1,31 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from fastapi.responses import PlainTextResponse
 from pathlib import Path
 import sys
-import os
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config import SQL_DIR
-from services.file_service import FileService
+from services.file_service import get_sql_files, save_uploaded_file, delete_file
 
 router = APIRouter(prefix="/api/files", tags=["files"])
-file_service = FileService(SQL_DIR)
 
 
 @router.get("")
 async def list_files():
-    return file_service.get_sql_files()
-
-
-@router.get("/{filename}/source", response_class=PlainTextResponse)
-async def get_source(filename: str):
-    """Return raw SQL source for a file."""
-    file_path = SQL_DIR / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    try:
-        content = file_path.read_text(encoding="utf-8", errors="replace")
-        return content
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return get_sql_files(SQL_DIR)
 
 
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     if not file.filename.endswith(".sql"):
-        raise HTTPException(status_code=400, detail="Only SQL files are allowed")
+        raise HTTPException(status_code=400, detail="Only SQL files allowed")
     try:
-        saved_file = await file_service.save_uploaded_file(file)
-        return {"success": True, "file": saved_file}
+        return await save_uploaded_file(SQL_DIR, file)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{filename}")
 async def delete_file(filename: str):
-    success = file_service.delete_file(filename)
-    if not success:
+    if not delete_file(SQL_DIR, filename):
         raise HTTPException(status_code=404, detail="File not found")
-    return {"success": True, "message": "File deleted"}
+    return {"success": True}

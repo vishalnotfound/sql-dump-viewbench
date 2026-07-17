@@ -1,38 +1,24 @@
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
-import sys
 from pathlib import Path
+import sys
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config import SQL_DIR
-from services.file_service import FileService
+from services.file_service import get_file_content, extract_tables, extract_table_data, _rows_to_dicts
 
 router = APIRouter(prefix="/api/files/{filename}", tags=["tables"])
-file_service = FileService(SQL_DIR)
 
 
 @router.get("/tables")
 async def list_tables(filename: str):
-    """Get list of tables in a SQL file."""
     file_path = SQL_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    try:
-        return file_service.get_tables(filename)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/metadata")
-async def get_metadata(filename: str):
-    """Get metadata for a SQL file."""
-    file_path = SQL_DIR / filename
-    if not file_path.exists():
+    content = get_file_content(SQL_DIR, filename)
+    if content is None:
         raise HTTPException(status_code=404, detail="File not found")
-    try:
-        return file_service.get_metadata(filename)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    table_names = extract_tables(content)
+    return [{"name": name} for name in table_names]
 
 
 @router.get("/table/{table_name}")
@@ -40,27 +26,38 @@ async def get_table_data(
     filename: str,
     table_name: str,
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=1000),
-    search: Optional[str] = Query(None),
-    sort: Optional[str] = Query(None),
-    order: str = Query("asc"),
+    page_size: int = Query(50, ge=1, le=500),
 ):
-    """Get paginated data for a specific table."""
     file_path = SQL_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    try:
-        data = file_service.get_table_data(
-            filename=filename,
-            table_name=table_name,
-            page=page,
-            page_size=page_size,
-            search=search,
-            sort=sort,
-            order=order,
-        )
-        return data
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    content = get_file_content(SQL_DIR, filename)
+    if content is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    columns, rows = extract_table_data(content, table_name)
+    total_rows = len(rows)
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_rows = rows[start:end]
+    page_rows = _rows_to_dicts(columns, page_rows)
+
+    return {
+        "table": table_name,
+        "columns": [c["name"] for c in columns],
+        "rows": page_rows,
+        "total_rows": total_rows,
+        "page": page,
+        "total_pages": (total_rows + page_size - 1) // page_size,
+    }
+
+
+@router.get("/source")
+async def get_source(filename: str):
+    file_path = SQL_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    content = get_file_content(SQL_DIR, filename)
+    if content is None:
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"tables": extract_tables(content)}

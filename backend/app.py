@@ -8,7 +8,7 @@ from config import STATIC_DIR, SQL_DIR
 from api.files import router as files_router
 from api.tables import router as tables_router
 
-app = FastAPI(title="SQL Dump Viewbench")
+app = FastAPI(title="SQL Dump Explorer")
 
 app.add_middleware(
     CORSMiddleware,

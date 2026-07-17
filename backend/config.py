@@ -3,10 +3,6 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SQL_DIR = BASE_DIR / "sql"
-CACHE_DIR = BASE_DIR / "cache"
-LOGS_DIR = BASE_DIR / "logs"
 STATIC_DIR = BASE_DIR / "frontend"
 
 SQL_DIR.mkdir(exist_ok=True)
-CACHE_DIR.mkdir(exist_ok=True)
-LOGS_DIR.mkdir(exist_ok=True)
