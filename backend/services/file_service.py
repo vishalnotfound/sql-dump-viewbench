@@ -47,7 +47,7 @@ def get_file_content(sql_dir: Path, filename: str):
 
 def extract_tables(sql_content: str):
     tables = []
-    for match in re.finditer(r"CREATE\s+TABLE\s+[`\"']?(\w+)[`\"']?\s*\(", sql_content, re.IGNORECASE):
+    for match in re.finditer(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"']?(\w+)[`\"']?\s*\(", sql_content, re.IGNORECASE):
         tables.append(match.group(1))
     return tables
 
@@ -56,7 +56,7 @@ def extract_table_data(sql_content: str, table_name: str):
     """Extract columns and rows for a specific table only."""
     # Find CREATE TABLE for this table - extract body between outer parentheses
     create_start = re.search(
-        r"CREATE\s+TABLE\s+[`\"']?" + re.escape(table_name) + r"[`\"']?\s*\(",
+        r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"']?" + re.escape(table_name) + r"[`\"']?\s*\(",
         sql_content,
         re.IGNORECASE
     )
@@ -80,20 +80,28 @@ def extract_table_data(sql_content: str, table_name: str):
     for col_match in re.finditer(r"[`\"']?(\w+)[`\"']?\s+(\w+(?:\s*\([^)]*\))?)", cols_section, re.IGNORECASE):
         col_name = col_match.group(1)
         col_type = col_match.group(2).strip().upper()
-        if col_name.upper() in ("PRIMARY", "KEY", "INDEX", "UNIQUE", "CONSTRAINT", "FOREIGN", "CHECK", "NOT", "DEFAULT", "NULL", "AUTO_INCREMENT", "IF"):
+        if col_name.upper() in ("PRIMARY", "KEY", "INDEX", "UNIQUE", "CONSTRAINT", "FOREIGN", "CHECK", "NOT", "DEFAULT", "NULL", "AUTO_INCREMENT", "IF", "FULLTEXT", "SPATIAL"):
             continue
         columns.append({"name": col_name, "type": col_type})
 
     # Find INSERT INTO for this table
     insert_pattern = re.compile(
-        r"INSERT\s+INTO\s+[`\"']?" + re.escape(table_name) + r"[`\"']?\s*.*?VALUES\s*(.*?);",
-        re.IGNORECASE | re.DOTALL
+        r"INSERT\s+(?:IGNORE\s+)?INTO\s+[`\"']?" + re.escape(table_name) + r"[`\"']?(?:\s*\([^)]*\))?\s+VALUES\s*",
+        re.IGNORECASE
     )
-    insert_match = insert_pattern.search(sql_content)
     rows = []
-    if insert_match:
-        values_str = insert_match.group(1)
-        rows = _parse_values(values_str)
+    for insert_match in insert_pattern.finditer(sql_content):
+        start_idx = insert_match.end()
+        i = start_idx
+        in_string = False
+        while i < len(sql_content):
+            if sql_content[i] == "'" and (i == 0 or sql_content[i-1] != "\\"):
+                in_string = not in_string
+            elif sql_content[i] == ";" and not in_string:
+                break
+            i += 1
+        values_str = sql_content[start_idx:i]
+        rows.extend(_parse_values(values_str))
 
     return columns, rows
 
@@ -141,13 +149,16 @@ def _parse_row_values(row_str: str):
         if row_str[i] == "'":
             j = i + 1
             while j < len(row_str):
+                if row_str[j] == "\\":
+                    j += 2
+                    continue
                 if row_str[j] == "'":
                     if j + 1 < len(row_str) and row_str[j + 1] == "'":
                         j += 2
                         continue
                     break
                 j += 1
-            val = row_str[i + 1:j].replace("''", "'")
+            val = row_str[i + 1:j].replace("''", "'").replace("\\'", "'").replace("\\\\", "\\")
             values.append(val)
             i = j + 1
             continue
