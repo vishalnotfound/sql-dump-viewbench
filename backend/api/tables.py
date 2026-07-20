@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from config import SQL_DIR
-from services.file_service import get_file_content, extract_tables, extract_table_data, _rows_to_dicts
+from services.file_service import get_file_content, extract_schema, extract_tables, extract_table_data, _rows_to_dicts
 
 router = APIRouter(prefix="/api/files/{filename}", tags=["tables"])
 
@@ -17,8 +17,8 @@ async def list_tables(filename: str):
     content = get_file_content(SQL_DIR, filename)
     if content is None:
         raise HTTPException(status_code=404, detail="File not found")
-    table_names = extract_tables(content)
-    return [{"name": name} for name in table_names]
+    schema = extract_schema(content)
+    return schema
 
 
 @router.get("/table/{table_name}")
@@ -35,7 +35,7 @@ async def get_table_data(
     if content is None:
         raise HTTPException(status_code=404, detail="File not found")
 
-    columns, rows = extract_table_data(content, table_name)
+    columns, rows, pks, fks = extract_table_data(content, table_name)
     total_rows = len(rows)
     start = (page - 1) * page_size
     end = start + page_size
@@ -44,11 +44,13 @@ async def get_table_data(
 
     return {
         "table": table_name,
-        "columns": [c["name"] for c in columns],
+        "columns": columns,
         "rows": page_rows,
         "total_rows": total_rows,
         "page": page,
         "total_pages": (total_rows + page_size - 1) // page_size,
+        "primary_keys": pks,
+        "foreign_keys": fks
     }
 
 

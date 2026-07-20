@@ -52,6 +52,53 @@ def extract_tables(sql_content: str):
     return tables
 
 
+def extract_schema(sql_content: str):
+    schema = []
+    for match in re.finditer(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"']?(\w+)[`\"']?\s*\(", sql_content, re.IGNORECASE):
+        table_name = match.group(1)
+        start = match.end()
+        depth = 1
+        i = start
+        while i < len(sql_content) and depth > 0:
+            ch = sql_content[i]
+            if ch == '(': depth += 1
+            elif ch == ')': depth -= 1
+            i += 1
+        
+        cols_section = sql_content[start:i-1]
+        
+        pks = []
+        fks = []
+        for col_match in re.finditer(r"[`\"']?(\w+)[`\"']?\s+[^,]*?PRIMARY\s+KEY", cols_section, re.IGNORECASE):
+            col_name = col_match.group(1)
+            if col_name.upper() not in ("PRIMARY", "KEY", "INDEX", "UNIQUE", "CONSTRAINT", "FOREIGN", "CHECK"):
+                pks.append(col_name)
+                
+        pk_match = re.search(r"PRIMARY\s+KEY\s*\(([^)]+)\)", cols_section, re.IGNORECASE)
+        if pk_match:
+            pk_cols = re.findall(r"[`\"']?(\w+)[`\"']?", pk_match.group(1))
+            for c in pk_cols:
+                if c not in pks:
+                    pks.append(c)
+                    
+        for fk_match in re.finditer(r"FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+[`\"']?(\w+)[`\"']?\s*\(([^)]+)\)", cols_section, re.IGNORECASE):
+            from_cols = re.findall(r"[`\"']?(\w+)[`\"']?", fk_match.group(1))
+            to_table = fk_match.group(2)
+            to_cols = re.findall(r"[`\"']?(\w+)[`\"']?", fk_match.group(3))
+            fks.append({
+                "from_cols": from_cols,
+                "to_table": to_table,
+                "to_cols": to_cols
+            })
+
+        schema.append({
+            "name": table_name,
+            "primary_keys": pks,
+            "foreign_keys": fks
+        })
+    return schema
+
+
 def extract_table_data(sql_content: str, table_name: str):
     """Extract columns and rows for a specific table only."""
     # Find CREATE TABLE for this table - extract body between outer parentheses
@@ -77,12 +124,36 @@ def extract_table_data(sql_content: str, table_name: str):
     cols_section = sql_content[start:i-1]
 
     columns = []
+    pks = []
+    fks = []
+    for col_match in re.finditer(r"[`\"']?(\w+)[`\"']?\s+[^,]*?PRIMARY\s+KEY", cols_section, re.IGNORECASE):
+        col_name = col_match.group(1)
+        if col_name.upper() not in ("PRIMARY", "KEY", "INDEX", "UNIQUE", "CONSTRAINT", "FOREIGN", "CHECK"):
+            pks.append(col_name)
+            
+    pk_match = re.search(r"PRIMARY\s+KEY\s*\(([^)]+)\)", cols_section, re.IGNORECASE)
+    if pk_match:
+        pk_cols = re.findall(r"[`\"']?(\w+)[`\"']?", pk_match.group(1))
+        for c in pk_cols:
+            if c not in pks:
+                pks.append(c)
+                
+    for fk_match in re.finditer(r"FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+[`\"']?(\w+)[`\"']?\s*\(([^)]+)\)", cols_section, re.IGNORECASE):
+        from_cols = re.findall(r"[`\"']?(\w+)[`\"']?", fk_match.group(1))
+        to_table = fk_match.group(2)
+        to_cols = re.findall(r"[`\"']?(\w+)[`\"']?", fk_match.group(3))
+        fks.append({
+            "from_cols": from_cols,
+            "to_table": to_table,
+            "to_cols": to_cols
+        })
+
     for col_match in re.finditer(r"[`\"']?(\w+)[`\"']?\s+(\w+(?:\s*\([^)]*\))?)", cols_section, re.IGNORECASE):
         col_name = col_match.group(1)
         col_type = col_match.group(2).strip().upper()
         if col_name.upper() in ("PRIMARY", "KEY", "INDEX", "UNIQUE", "CONSTRAINT", "FOREIGN", "CHECK", "NOT", "DEFAULT", "NULL", "AUTO_INCREMENT", "IF", "FULLTEXT", "SPATIAL"):
             continue
-        columns.append({"name": col_name, "type": col_type})
+        columns.append({"name": col_name, "type": col_type, "is_pk": col_name in pks})
 
     # Find INSERT INTO for this table
     insert_pattern = re.compile(
@@ -103,7 +174,7 @@ def extract_table_data(sql_content: str, table_name: str):
         values_str = sql_content[start_idx:i]
         rows.extend(_parse_values(values_str))
 
-    return columns, rows
+    return columns, rows, pks, fks
 
 
 def _rows_to_dicts(columns, rows):
