@@ -1,200 +1,26 @@
 # SQL Dump Viewbench
 
-SQL Dump Viewbench (also known as sql-dump-viewbench) is a lightweight, super-fast, web-based tool designed to parse, explore, and visualize SQL dump files without requiring a running database server. 
+SQL Dump Viewbench is a lightweight web application that allows you to parse, browse, and visualize SQL dump files without needing a running database server.
 
-By parsing standard SQL dump constructs directly on the backend, this application provides an interactive visual database schema, a robust entity-relationship diagram (ERD), and paginated spreadsheets of your actual table records in a beautiful, responsive dark-themed dashboard.
+## Features
 
----
+- **Zero-DB SQL Parser**: Instantly extracts tables, columns, constraints, and rows from SQL dumps on-the-fly.
+- **Interactive File Explorer**: Easily upload and delete .sql dump files.
+- **Entity-Relationship Diagrams (ERDs)**: Generates visual interactive database schemas using Mermaid.js.
+- **Spreadsheet-style Data Grid**: View actual data rows with backend-driven pagination.
+- **Sleek Dark UI**: Built with a responsive dark-themed visual design.
 
-## Key Features
+## How to Run Locally
 
-- **Zero-DB Parsing**: Upload and browse full SQL dumps without setting up or connecting to MySQL, PostgreSQL, or SQLite. All schema and data structures are processed on-the-fly.
-- **Interactive File Manager**: Easily upload, select, and delete .sql files from the persistent sidebar.
-- **Visual Entity-Relationship Diagrams (ERDs)**: Automatically maps primary/foreign key relationships and displays a live, interactive diagram using Mermaid.js.
-- **Dynamic Table Browser**: Search and filter through all extracted tables dynamically using the responsive table-search interface.
-- **Spreadsheet-style Paginated Data Grid**:
-  - View actual records in structured, clean tables.
-  - Highlights Primary Keys with visual indicators (such as key icons or labels) and shows column types.
-  - Gracefully displays NULL values and handles escaped strings, floats, and integers.
-  - Features high-performance backend-driven pagination (slicing 50 rows per page to prevent browser lag on massive dumps).
-- **Modern Responsive Dark-Mode UI**: Built with a sleek, consistent dark palette that is easy on the eyes.
+1. **Install Dependencies**:
+   ```bash
+   pip install -r backend/requirements.txt
+   ```
 
----
+2. **Start the Server**:
+   ```bash
+   cd backend && uvicorn app:app --reload --port 8000
+   ```
 
-## Tech Stack
-
-### Backend
-- **Python 3.11**
-- **FastAPI**: Async, high-performance web framework.
-- **Uvicorn**: Lightning-fast ASGI web server.
-- **Regular Expression Parser**: Customized Python parser designed for parsing MySQL/InnoDB structured dumps efficiently.
-
-### Frontend
-- **Vanilla HTML5, CSS3, & JavaScript (ES6+)**: Entirely self-contained for optimal loading times - no heavy JavaScript frameworks (React/Vue/Angular) or build tools are required.
-- **Mermaid.js (via CDN)**: Powering the live, dynamically generated ERDs directly from parsed foreign key mappings.
-- **CSS Grid & Flexbox**: Clean, robust layout design featuring a collapsible/scalable interface and custom dark-mode variables.
-
----
-
-## Directory Structure
-
-```text
-C:\codes\sql dump exp\
-├── .gitignore               # Ignored files (pycache, virtual environments, log files, etc.)
-├── README.md                # This documentation file
-├── render.yaml              # Infrastructure-as-code for Render.com cloud deployment
-├── backend/                 # Python backend service
-│   ├── app.py               # Application entry point, FastAPI routing & middlewares
-│   ├── config.py            # Global configuration (paths, directory creation)
-│   ├── requirements.txt     # Python dependencies
-│   ├── api/                 # API controllers
-│   │   ├── files.py         # /api/files endpoints (list, upload, delete)
-│   │   └── tables.py        # /api/files/{filename}/... schema and data endpoints
-│   └── services/            # Core business logic
-│       └── file_service.py  # Regex parsing logic, chunking, and file utilities
-├── sql/                     # Local storage directory for uploaded .sql files
-│   ├── sample.sql           # Quick-start sample SQL dump file
-│   └── ...                  # Uploaded SQL files are saved here
-└── frontend/                # Interactive Web Dashboard
-    ├── index.html           # Full-featured UI: markup, styles, and AJAX script
-    ├── css/                 # Optional split CSS directory (currently consolidated in index.html)
-    └── js/                  # Optional split JS directory (currently consolidated in index.html)
-```
-
----
-
-## How It Works (Under the Hood)
-
-### 1. Regex Parsing Engine
-Instead of executing the SQL, file_service.py uses multi-layered, specialized regular expressions to construct a virtual database schema:
-- **Table Detection**: Matches CREATE TABLE [name] (...) blocks to extract table names.
-- **Schema Extraction**: Processes column definitions to identify column names, data types, and constraint definitions (like PRIMARY KEY and FOREIGN KEY ... REFERENCES ...).
-- **Data Insertion**: Matches INSERT INTO [table] VALUES (...) lines, parsing rows, processing escaped single quotes, handling nested commas, and converting strings, integers, floats, or None (for NULLs).
-
-### 2. Backend Slicing & Pagination
-To ensure that importing massive databases (such as files over 20MB) does not crash the client browser, the backend reads SQL content and splits insertion lines into records. The client only requests a specific range of records at a time (page and page_size query params), fetching a slimmed-down JSON slice that loads instantly.
-
-### 3. Client-Side Rendering & ERDs
-When a file is loaded, the frontend fetches its schema and constructs a Mermaid ER diagram definition. For example, if a table orders references users(id), it writes:
-```text
-erDiagram
-    orders ||--o{ users : references
-```
-This is compiled locally by Mermaid.js to display a beautiful, vector-based interactive graph.
-
----
-
-## Local Development Setup
-
-To run the application locally on your machine, follow these steps:
-
-### 1. Prerequisites
-- **Python 3.11+** installed on your system.
-
-### 2. Set Up Virtual Environment & Dependencies
-Navigate to the root directory and create/activate a Python virtual environment:
-
-**On Windows (PowerShell):**
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
-
-**On macOS/Linux:**
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-Install the required Python packages:
-```bash
-pip install -r backend/requirements.txt
-```
-
-### 3. Run the Application
-Start the FastAPI server using Uvicorn:
-```bash
-cd backend
-uvicorn app:app --reload --port 8000
-```
-
-Once running, navigate your web browser to:
-**http://localhost:8000**
-
----
-
-## Deploying to Render
-
-This repository is optimized for quick deployment on Render. The provided render.yaml template configures a Web Service in Python, installing dependencies, configuring environments, and starting the FastAPI server seamlessly:
-
-1. Connect your repository to Render.
-2. Select **Blueprint** or import the render.yaml configuration.
-3. Render will deploy the application automatically.
-
----
-
-## API Reference
-
-### File Management API
-#### 1. List SQL Files
-- **Endpoint**: `GET /api/files`
-- **Response**: Array of available SQL dumps in the sql/ folder.
-  ```json
-  [
-    {
-      "name": "sample.sql",
-      "size": 1071,
-      "modified": "2026-07-20T12:00:00.000000"
-    }
-  ]
-  ```
-
-#### 2. Upload SQL File
-- **Endpoint**: `POST /api/files/upload`
-- **Content-Type**: `multipart/form-data`
-- **Body**: File upload (file with .sql extension).
-
-#### 3. Delete SQL File
-- **Endpoint**: `DELETE /api/files/{filename}`
-- **Response**: `{"success": true}`
-
----
-
-### Database Schema & Data API
-#### 4. List Tables and Schema
-- **Endpoint**: `GET /api/files/{filename}/tables`
-- **Response**: An array containing all table configurations, primary keys, and foreign keys.
-  ```json
-  [
-    {
-      "name": "users",
-      "primary_keys": ["id"],
-      "foreign_keys": []
-    }
-  ]
-  ```
-
-#### 5. Get Table Column Definitions and Paginated Rows
-- **Endpoint**: `GET /api/files/{filename}/table/{table_name}?page=1&page_size=50`
-- **Response**: Column names, data types, visual identifiers, paginated values, and total row stats.
-  ```json
-  {
-    "table": "users",
-    "columns": [
-      { "name": "id", "type": "INT(11)", "is_pk": true },
-      { "name": "first_name", "type": "VARCHAR(255)", "is_pk": false }
-    ],
-    "rows": [
-      { "id": 1, "first_name": "John" }
-    ],
-    "total_rows": 5,
-    "page": 1,
-    "total_pages": 1,
-    "primary_keys": ["id"],
-    "foreign_keys": []
-  }
-  ```
-
-#### 6. Get Raw Source Table Names
-- **Endpoint**: `GET /api/files/{filename}/source`
-- **Response**: `{"tables": ["users", "products"]}`
+3. **Open Browser**:
+   Go to **http://localhost:8000** to upload or select a SQL file.
