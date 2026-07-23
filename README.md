@@ -12,7 +12,7 @@ SQL Dump Viewbench is a lightweight web application that allows you to parse, br
 
 ## How to Run Locally
 
-1. **Install Dependencies**:
+1. **Install Dependencies on local machine**:
    ```bash
    pip install -r backend/requirements.txt
    ```
